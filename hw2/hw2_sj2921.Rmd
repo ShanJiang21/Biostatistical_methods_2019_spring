@@ -1,0 +1,376 @@
+---
+title: "HW2_sj2921"
+author: "Shan"
+date: "2/14/2019"
+output: pdf_document
+---
+
+```{r include=FALSE}
+library(ggplot2)      # plotting commands
+library(tidyverse)    # For data 
+library(knitr)        # kable table formatting
+library(grid)         # units function for ggplot
+library(kableExtra)
+```
+
+
+### Problem 1
+
+Import data
+
+```{r fig.height=3.5, fig.width=4, message=FALSE, warning=FALSE}
+dose = c(0, 1, 2, 3, 4)
+dying = c(2, 8, 15, 23, 27)
+not_dying = 30 - dying
+prob_die = dying/30
+bio_df = data.frame(dose, dying, not_dying, prob_die)
+
+## Look at the dataset 
+knitr::kable(bio_df,digits = 2, "latex", booktabs = T) %>% 
+kable_styling(latex_options = "striped", full_width = F) 
+
+ggplot(bio_df, aes(x = dose, y =  prob_die)) +
+  geom_point()
+```
+
+
+### Fit the GLM model 
+
+$$g(P(dying)) = \alpha + \beta X$$
+
+#### Logit links 
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+y = cbind(dying, not_dying)
+bio.logit = glm( y ~ dose,
+                family = binomial(link = 'logit'), data = bio_df )  
+summary(bio.logit)
+```
+
+#### Confidence interval 
+
+```{r}
+# CI for beta
+vcov(bio.logit) 
+# variance-covariance matrix of beta MLE (fisher information inverse)
+
+beta = bio.logit$coefficients[2]
+se = sqrt(vcov(bio.logit)[2,2]) # (same as in above)
+beta + c(qnorm(0.025), 0, -qnorm(0.025)) * se
+
+```
+
+#### deviance
+```{r}
+logit.dev = sum(residuals(bio.logit, type = 'deviance')^2)
+logit.dev  ## Residual deviance:  0.37875
+
+```
+
+The estimated regression is 
+
+$$log(\frac{\hat\pi(x)}{1-\hat\pi(x)}) = -2.3238 + 1.1619x$$
+
+with $\beta_1$ being significant(p <0.01) and positive, implying that dose amount increases so does the probability of dying. As x increase 1 unit the odds of dying increase multiplicative by $e^{1.1619}=3.196$. That is, for a dose increase, there is about a 219% increase in a chance of dying compared to a consuming 1 unit less dose(within the range of the data).
+
+##### P(dying| x = 0.01)
+
+```{r}
+# CI for pi
+predict(bio.logit, 
+        data.frame(dose = 0.01), 
+        se.fit = TRUE, type = 'response')$fit
+```
+
+#### probit link 
+
+```{r include=FALSE}
+bio.probit = glm(cbind(dying,not_dying) ~ dose,
+                family = binomial(link = probit ))  
+summary(bio.probit)
+```
+
+The estimated regression is 
+$$log(\frac{\hat\pi(x)}{1-\hat\pi(x)}) = -1.378 + 0.686x$$
+with $\beta_1$ being significant(p < 0.001) and positive, implying that dose amount increases so does the probability of dying. 
+As x increase 1 unit the odds of dying increase multiplicative by $e^{0.686}= 1.986$. That is, for a dose increase, there is about a 98.6% increase in a chance of dying compared to a consuming 1 unit less dose(within the range of the data).
+
+##### Confidence interval 
+
+```{r}
+# CI for beta
+vcov(bio.probit) 
+# variance-covariance matrix of beta MLE (fisher information inverse)
+beta = bio.probit$coefficients[2]
+se = sqrt(vcov(bio.probit)[2,2]) # (same as in above)
+beta + c(qnorm(0.025), -qnorm(0.025)) * se # 0 is for point estimate
+```
+
+##### deviance
+```{r}
+probit.dev = sum(residuals(bio.probit, type = 'deviance')^2)
+probit.dev  ## Residual deviance:  0.3136684
+
+```
+
+##### predict
+```{r}
+# CI for pi
+predict(bio.probit, data.frame(dose = 0.01), 
+        se.fit = TRUE, type = 'response')$fit 
+
+```
+
+#### c-log-log link((complementary log-log))
+```{r include=FALSE}
+bio.log = glm(cbind(dying,not_dying) ~ dose,
+                family = binomial(link = cloglog))  
+summary(bio.log)
+```
+
+The estimated regression is 
+
+$$log(\frac{\hat\pi(x)}{1-\hat\pi(x)}) = -1.9942+0.7468x$$
+with $\beta_1$ being significant(p < 0.001) and positive, implying that dose amount increases so does the probability of dying. 
+As x increase 1 unit the odds of dying increase multiplicative by $e^{0.7468}= 2.1102$. That is, for a dose increase, there is about a 111% increase in a chance of dying compared to a consuming 1 unit less dose(within the range of the data).
+
+##### Confidence interval 
+
+```{r}
+# CI for beta
+vcov(bio.log) 
+# variance-covariance matrix of beta MLE (fisher information inverse)
+beta = bio.log$coefficients[2]
+se = sqrt(vcov(bio.log)[2,2]) # (same as in above)
+beta + c(qnorm(0.025), 0, -qnorm(0.025)) * se # 0 is for point estimate
+```
+
+##### deviance
+```{r}
+c_log.dev = sum(residuals(bio.log, type = 'deviance')^2)
+c_log.dev  ## Residual deviance:  2.23048
+```
+
+##### predict: 
+```{r}
+# CI for pi
+predict(bio.log, data.frame(dose = 0.01), se.fit = TRUE, type = 'response')$fit 
+
+```
+
+### 1.1 Table results
+```{r}
+row1 = c("model", "Estimateof beta" , "CI for beta", "Deviance", "p(dying|x = 0.01)")
+row2 = c("logit",  1.1619, "[0.8063, 1.5175]", 0.3788, 0.0901)
+row3 = c("probit",  0.6864,  "[0.4967 0.8761]" , 0.3137, 0.0853 )
+row4 = c("c-log-log", 0.7468, "[0.5323, 0.9613]" ,2.2305, 0.1282)
+p1 = rbind(row1, row2, row3, row4)
+      
+
+kable(p1, "latex", booktabs = T ) %>%
+kable_styling(full_width = F) %>%
+column_spec(1, bold = T, color = "black") %>%
+column_spec(2, width = "10em")
+```
+
+
+
+#### (ii). LD50 with 90% CI
+
+##### (1)logit 
+```{r}
+# LD50 est and CI
+beta0 = bio.logit$coefficients[1]
+beta1 = bio.logit$coefficients[2]
+betacov = vcov(bio.logit) # inverse fisher information
+x0fit = -beta0/beta1
+x0fit # Used for cross validation 
+exp(x0fit) # point estimate of LD50
+
+varx0 = betacov[1,1]/(beta1^2) + betacov[2,2]*(beta0^2)/(beta1^4) - 
+  2*betacov[1,2]*beta0/(beta1^3)
+c(x0fit,sqrt(varx0)) # point est and se
+exp((x0fit + c(qnorm(0.05),-qnorm(0.05))*sqrt(varx0)))
+# 90% CI for LD50
+```
+
+The 90% CI is (5.509631, 9.909583).
+
+
+
+##### (2) probit
+
+As the probit model has its unique link function, $g^{-1}(\eta) = \phi(eta)$, so we have $g^{-1}(0.5) = \phi(0.5) = 0$,
+then we can derive from this that the $x_0 = 0$.
+SO, the point estimate remains the same while the x est. value is still the same, g(0.5)  = 0.
+
+```{r}
+# LD50 est and CI
+beta0 = bio.probit$coefficients[1]
+beta1 = bio.probit$coefficients[2]
+betacov = vcov(bio.probit) # inverse fisher information
+x0fit = -beta0/beta1
+x0fit # Used for cross validation 
+exp(x0fit) # point estimate of LD50
+
+varx0 = betacov[1,1]/(beta1^2) + betacov[2,2]*(beta0^2)/(beta1^4) - 
+  2*betacov[1,2]*beta0/(beta1^3)
+c(x0fit,sqrt(varx0)) # point est and se
+exp((x0fit + c(qnorm(0.05),-qnorm(0.05))*sqrt(varx0))) # 90% CI for LD50
+```
+
+Probit: 90% Ci is [5.583, 9.902]
+
+
+##### (3)c-log-clog
+
+The link function has changed into:
+
+$$g_3(\pi) = log (-log(1 -\pi))$$
+so, we have $g_3(\pi) = log (-log(1 - \pi)); g(0.5) = log(-log(1 - 0.5)) = log (-log(0.5))$ 
+
+Then we can derive the derivatives from $\beta_0$ and $\beta_1$ 
+
+```{r echo=TRUE}
+# LD50 est and CI
+beta0 = bio.log$coefficients[1]
+beta1 = bio.log$coefficients[2]
+betacov = vcov(bio.log) # inverse fisher information
+x0fit = (log(log(2))-beta0)/beta1
+
+x0fit # Used for cross validation 
+exp(x0fit) # point estimate of LD50
+
+varx0 = betacov[1,1]/(beta1^2) + betacov[2,2]*((beta0- log(log(2)))^2)/(beta1^4) - 2 * betacov[1,2] * (beta0 - log(log(2)))/(beta1^3)
+c(x0fit,sqrt(varx0)) # point est and se
+exp((x0fit + c(qnorm(0.05),-qnorm(0.05))*sqrt(varx0))) # 90% CI for LD50
+```
+
+The estimate value for three links are as following:
+
+* The logit function: 
+* LD50 point est. 7.389056;   90% CI [5.5096, 9.9096]
+
+* The probit function: 
+* LD50 est.  7.436  ; 90% CI [5.583, 9.904]
+
+* C-log-log function: 
+* LD50 point est.  8.841  ;  90% CI [6.5263, 11.9774]
+
+
+### Problem 2
+
+```{r include=FALSE}
+## import data
+amount = function(x) 
+    {x 
+    x * 5}
+
+amount = amount(2:18)
+offers = c(4, 6, 10, 12, 39, 36, 22, 14, 10, 12, 8, 9, 3, 1, 5, 2, 1)
+enrolls =  c(0, 2, 4, 2, 12, 14, 10, 7, 5, 5, 3, 5, 2, 0, 4, 2, 1)
+decline = offers - enrolls
+mph_df = data.frame(amount, 
+                    offers,  decline, enrolls)
+
+class(mph_df$amount)
+
+## Look at the dataset 
+knitr::kable(mph_df,digits = 2)
+
+ggplot(mph_df, aes(x = amount, y =  enrolls/decline)) +
+  geom_point()
+
+
+## Fit the glm model 
+y = cbind(enrolls, decline)
+mph.logit = glm( y ~ amount,
+                family = binomial(link = 'logit'), data = mph_df )  
+summary(mph.logit)
+
+
+```
+
+##### 1. Goodness of fit
+```{r}
+
+##(1) Matched the grouped model fit 
+
+beta0 = coef(mph.logit)[1]
+beta1 = coef(mph.logit)[2]
+beta_0 = amount * beta1
+pihat = fitted(mph.logit) 
+
+### Pearson-chi-square residual 
+G.res = (y - offers  * pihat)/sqrt ( offers * pihat *(1 - pihat))
+residuals(mph.logit, type = "pearson")
+sum(residuals(mph.logit, type = "pearson")^2)
+
+## Deviance 
+dev = sum(residuals(mph.logit, type = "deviance")^2)
+dev 
+
+
+## compare with chi-square
+pval = 1 - pchisq(dev, 15) ## 2 parameters: 17-2 =15
+## pval is 0.77 > 0.05, fail to reject the null hypothesis, our model fits well enough.
+
+```
+
+The residual deviance and test results shows that the pvalue is 0.77, which means we cannot reject the null hypothesis, so our model can be a suitable fit.
+
+
+##### 2. Relationship between the scholarship amount and enrollment rate
+
+```{r}
+beta0 
+beta1 
+```
+$$log(\frac{\pi}{1-\pi}) = amount \cdot \beta_1 + \beta_0$$
+$$log(\frac{\pi}{1-\pi}) = amount \cdot 0.031 - 1.648$$
+
+*Interpretation*: 
+
+(1). In this study, we find that when there is no scholarship provided for mph students, log odds of enrollment would be -1.648; 
+
+(2). For one thousand dollar increase of scholarship provided for mph students, the log odds of enrollment would increase by 0.031 keeping other factors the costant. 
+
+
+###### What is 95% CI?
+
+```{r}
+# CI for beta
+vcov(mph.logit) 
+# variance-covariance matrix of beta MLE (fisher information inverse)
+beta = mph.logit$coefficients[2]
+se = sqrt(vcov(mph.logit)[2,2]) # (same as in above)
+beta + c(qnorm(0.025), 0, -qnorm(0.025)) * se # 0 is for point estimate
+
+# CI for odds ratio: exp(beta); tranfer back. 
+exp(beta + c(qnorm(0.025),0,-qnorm(0.025)) * se)
+
+```
+
+The 95% CI for $\beta_1$ is [0.01198, 0.04992], we are 95% confident that the coefficient of amount falls between 0.01198 and 0.04992.
+
+The 95% CI for odds ratio is [1.01205, 1.05119], we are 95% confident that the odds ratio of amount falls between 1.012050 and 1.051190, which is greater than 1, implying a positive correalation of scholarship and enrollment.
+
+
+##### 3. Get 40% yield rate (the percentage of admitted students who enroll?) What is the 95% CI?
+
+```{r}
+# 40 yield rate est and CI
+vcov(mph.logit) # inverse fisher information
+x_fit = (log(0.4/(1 - 0.4)) - beta0)/beta1  ## point est.  40.13429 
+beta1_sq = beta1^2
+# point estimate of 40% yield rate
+varx0 = betacov[1,1] *  (1/beta1)^2 + (log(2/3) - beta0)^2*betacov[2,2] / (beta1^4) + 2 * (betacov[1,2]  * (log(2/3) - beta0) * (1/beta1^3 ) )
+
+c(x_fit,sqrt(varx0)) # point est and se
+x_fit + c(qnorm(0.025),-qnorm(0.025))*sqrt(varx0) # 95% CI for yield rate 40%
+
+```
+
+* We should provide **$40,134 dollars** scholarship to get 40% yield rate; 
+
+* Through using the Yield rate of 40%, we get the point est. of scholarship amount, the 95% Confidence interval is [30.58304, 49.68553], implying that we are 95% confident that the est. of scholarship amount falls between $30,583 and $49,685.

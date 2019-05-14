@@ -1,0 +1,203 @@
+---
+title: "P8131_hw9"
+author: Shan Jiang 
+output:
+     pdf_document:
+         latex_engine: xelatex
+fontsize: 11.5pt
+geometry: margin=1.1in 
+---
+
+## Problem 1
+
+Determine the survival and density functions for a continuous survival time variable with hazard function:
+
+$\lambda(x) = h(x) = \frac{2x}{(1+x^2)}$
+$$S(t) = exp\big\{- \int_{0}^{t} \lambda(x) dx\big\} = exp\big\{ -\int_{0}^{t} \frac{2x}{(1+x^2)} dx\big\} = exp\big\{ -ln(1+t^2)\big\} = -(1+t^2)$$ 
+$f(t) = S(t) \times \lambda(t) = exp\big\{ -ln(1+t^2)\big\} \times \frac{2t}{(1+t^2)} = 2t$
+
+
+## Problem 2
+
+#### (1) K_M estimate of survival function 
+```{r}
+
+ti <- rbind(1, 2, 4, 5, 6, 7, 8, 9, 10)
+ni <- rbind(10, 9, 7, 6, 5, 4, 3, 2, 1)
+di <- rbind(1, 2, 0, 0, 1, 0, 0, 0, 0)
+ci <- rbind(0, 0, 1, 1, 0,  1, 1, 1, 1)
+Hi <- rbind(di/ni) ## K_M estimate of survival function 
+
+S1 = 1 * (1- Hi[1,])
+S2 = S1 * 1 * (1- Hi[2,])
+
+St = function(t) {
+        1 * (1- Hi[t,])
+}
+
+hat_st = rbind(1 * St(1), 
+               St(1) * St(2), 
+               St(1) * St(2) * St(3), 
+               St(1) * St(2) * St(3) * St(4), 
+               St(1) * St(2) * St(3) * St(4)* St(5), 
+               St(1) * St(2) * St(3) * St(4) * St(5) * St(6), 
+               St(1) * St(2) * St(3) * St(4)* St(5) * St(6) * St(7), 
+               St(1) * St(2) * St(3) * St(4)* St(5) * St(6) * St(7) * St(8),
+               St(1) * St(2) * St(3) * St(4)*  St(5) * St(6) * St(7) * St(8) * St(9))
+
+        
+lifetable <- data.frame(ti = ti, 
+                ni = ni, 
+                di = di, 
+                ci = ci,
+                Hi = Hi, St = hat_st)
+
+knitr::kable(lifetable, digits = 2)
+
+```
+
+The K_M estimate of survival function is defined as 
+
+$\hat S(t) = \prod_{i = 1}^{k}( 1 - \hat H_{i})$, $\text{KM estimator is } \hat H_{t} = -log(\hat S_t)$
+
+$$\hat S(1) =  \prod_{i = 1}^{1}(1 - \hat H_i) = 1 \times (1 - 0.1) = 0.9$$
+$$\hat S(2) =  \prod_{i = 1}^{2}(1 - \hat H_i) = 1 \times (1 - 0.1) \times (1 - \frac{2}{9}) = 0.7$$
+
+$$\hat S(4) = \prod_{i = 1}^{3}(1 - \hat H_i) = 1 \times (1 - 0.1) \times (1 - \frac{2}{9})  \times (1 - \frac{0}{7})= 0.7$$
+$$\hat S(5) =  \prod_{i = 1}^{4}(1 - \hat H_i) = 1 \times (1 - 0.1) \times (1 - \frac{2}{9})  \times (1 - \frac{0}{7}) \times (1 - \frac{0}{6}) = 0.7$$
+
+$$\hat S(6) =  \prod_{i = 1}^{5}(1 - \hat H_i) = 1 \times (1 - 0.1) \times (1 - \frac{2}{9})  \times (1 - \frac{0}{7}) \times (1 - \frac{0}{6}) \times (1 - \frac{1}{5}) = 0.56$$
+
+
+$\hat S(7) = \prod_{i = 1}^{7}(1 - \hat H_i) = 1 \times (1 - 0.1) \times (1 - \frac{2}{9})  \times (1 - \frac{0}{7}) \times (1 - \frac{0}{6}) \times (1 - \frac{1}{5}) \times (1 - \frac{0}{4}) = 0.56$
+
+$$\hat S(8) = \prod_{i = 1}^{8}(1 - \hat H_i) = 1 \times (1 - 0.1) \times (1 - \frac{2}{9})  \times (1 - \frac{0}{7}) \times (1 - \frac{0}{6}) \times (1 - \frac{1}{5}) \times (1 - \frac{0}{4}) \times (1 - \frac{0}{3})= 0.56$$
+
+
+$$\hat S(9) = \prod_{i = 1}^{9}(1 - \hat H_i) = 1 \times (1 - 0.1) \times (1 - \frac{2}{9})  \times (1 - \frac{0}{7}) \times (1 - \frac{0}{6}) \times (1 - \frac{1}{5}) \times (1 - \frac{0}{4}) \times (1 - \frac{0}{3})  \times (1 - \frac{0}{2}) = 0.56$$
+
+$$\hat S(10) = \prod_{i = 1}^{10}(1 - \hat H_i) = 1 \times (1 - 0.1) \times (1 - \frac{2}{9})  \times (1 - \frac{0}{7}) \times (1 - \frac{0}{6}) \times (1 - \frac{1}{5}) \times (1 - \frac{0}{4}) \times (1 - \frac{0}{3})  \times (1 - \frac{0}{2})  \times (1 - \frac{0}{1})= 0.56$$
+
+#### (2) N_A estimate of cumulative hazard function;
+
+* Nelson-Aalen estimator:
+
+$$t_1 = \sum_{t_{i} \leq t }\frac{d_i}{n_i} = \frac{d_1}{n_1} = \frac{1}{10} = 0.1$$
+
+$$t_2 = \sum_{t_{i} \leq t }\frac{d_i}{n_i} = \frac{d_1}{n_1} + \frac{d_2}{n_2} = \frac{2}{9} + \frac{1}{10}= \frac{11}{90}$$
+
+$$t_4 = \sum_{t_{i} \leq t }\frac{d_i}{n_i} = \frac{d_1}{n_1} + \frac{d_2}{n_2} + \frac{d_3}{n_3}= \frac{2}{9} + \frac{1}{10} + \frac{0}{7}= \frac{11}{90}$$
+
+$$t_5 = \sum_{t_{i} \leq t }\frac{d_i}{n_i} = \frac{d_1}{n_1} + \cdots + \frac{d_5}{n_5}=  \frac{2}{9} + \frac{1}{10} + \frac{0}{7} + \frac{0}{6} = \frac{11}{90}$$
+$$t_6 = \sum_{t_{i} \leq t }\frac{d_i}{n_i} = \frac{d_1}{n_1} + \cdots + \frac{d_6}{n_6}=  \frac{2}{9} + \frac{1}{10} + \frac{0}{7} + \frac{0}{6} + \frac{1}{5}= = \frac{29}{90}$$
+$$t_7 = \sum_{t_{i} \leq t }\frac{d_i}{n_i} = \frac{d_1}{n_1} + \cdots + \frac{d_7}{n_7}=  \frac{2}{9} + \frac{1}{10} + \frac{0}{7} + \frac{0}{6} + \frac{1}{5} + \frac{0}{4}= \frac{29}{90}$$
+
+$$t_8 = \sum_{t_{i} \leq t }\frac{d_i}{n_i} = \frac{d_1}{n_1} + \cdots + \frac{d_8}{n_8}=  \frac{2}{9} + \frac{1}{10} + \frac{0}{7} + \frac{0}{6} + \frac{1}{5} + \frac{0}{4} + \frac{0}{3} = \frac{29}{90}$$
+
+
+$$t_9 = \sum_{t_{i} \leq t }\frac{d_i}{n_i} = \frac{d_1}{n_1} + \cdots + \frac{d_9}{n_9}=  \frac{2}{9} + \frac{1}{10} + \frac{0}{7} + \frac{0}{6} + \frac{1}{5} + \frac{0}{4} + \frac{0}{3}  + \frac{0}{2}= \frac{29}{90}$$
+
+
+$$t_{10} = \sum_{t_{i} \leq t }\frac{d_i}{n_i} = \frac{d_1}{n_1} + \cdots + \frac{d_{10}}{n_{10}}=  \frac{2}{9} + \frac{1}{10} + \frac{0}{7} + \frac{0}{6} + \frac{1}{5} + \frac{0}{4} + \frac{0}{3}  + \frac{0}{2} + \frac{0}{1}= \frac{29}{90}$$
+
+
+#### (3) Fleming-Harrington estimate of survival function
+
+Fleming-Harrington estimate is $exp(-\tilde H(t))$ for S(t): 
+
+* $exp(-\tilde H(1)) = exp(-(t_{1}))= exp(-0.1) \approx 0.9048$
+* $exp(-\tilde H(2)) = exp(-(t_{2}))= exp(-0.122) \approx 0.8850$
+* $exp(-\tilde H(4)) =  exp(-0.122) \approx 0.8850$
+* $exp(-\tilde H(5)) = exp(-0.122) \approx 0.8850$
+* $exp(-\tilde H(6)) exp(-0.322) \approx 0.7246$
+* $exp(-\tilde H(7)) \approx 0.7246$
+* $exp(-\tilde H(8))  \approx 0.7246$ 
+* $exp(-\tilde H(9))  \approx 0.7246$
+* $exp(-\tilde H(10)) \approx 0.7246$
+
+
+## Problem 3
+
+This data frame contains the following columns:
+
+**type** Tumor DNA profile (1=Aneuploid Tumor, 2=Diploid Tumor) 
+
+**time**  Time to death or on-study time, weeks
+
+**delta** Death indicator (0=alive, 1=dead)
+
+```{r}
+## load the data 
+library(KMsurv)
+library(survival)
+data(tongue)
+
+## histogram for overview of data 
+hist(tongue$time, xlab="Length of Survival Time(weeks)", main="Histogram of Survial Time in Patients")
+
+```
+
+
+####  Plot the KM-curve 
+
+##### Aneuploid Tumor
+
+```{r}
+
+
+# KM survival function -Aneuploid Tumor
+KM1 = survfit(Surv(time, delta)~1,  
+             data = subset(tongue, type =="1"), 
+             conf.type = 'log')
+
+## K_M Curve for Aneuploid Tumor
+plot(KM1, conf.int = T, mark.time = TRUE,
+     xlab="weeks", ylab = "Survival Probability", 
+     main="KM curve for Aneuploid Tumor", cex.lab=1.5, cex.main=1.5)
+
+summary(KM1)
+
+```
+
+##### Diploid Tumor
+
+```{r}
+
+# KM survival function -Diploid Tumor
+KM2 = survfit(Surv(time, delta)~1,  
+             data = subset(tongue, type =="2"), 
+             conf.type = 'log')
+
+
+summary(KM2)
+
+
+plot(KM2, conf.int = T, mark.time = TRUE,
+     xlab="weeks", ylab = "Survival Probability", 
+     main="KM curve for Diploid Tumor", cex.lab=1.5, cex.main=1.5)
+
+
+plot(KM2)
+```
+
+####  Est. One-year survival rate and 95% CI 
+
+
+One-year is 52 weeks 
+
+```{r}
+# obtain survival rate at given time, with CI for Type I: 0.654
+summary(KM1,time = c(52)) 
+```
+
+
+The one-year(52 weeks) survival rate is 0.654, with 95% CI as [0.537, 0.797] for Aneuploid Tumor. 
+
+```{r}
+# obtain survival rate at given time, with CI for Type II: 0.486
+summary(KM2,time = c(52)) 
+```
+
+The one-year(52 weeks) survival rate is 0.486, with 95% CI as of [0.33, 0.716] for Diploid Tumor.
+
+

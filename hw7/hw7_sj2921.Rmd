@@ -1,0 +1,264 @@
+---
+title: "P8131_hw7"
+author: Shan Jiang 
+output:
+     pdf_document:
+         latex_engine: xelatex
+fontsize: 10.5pt
+geometry: margin=0.6in
+---
+
+
+## (1)  Exploratory analysis 
+
+#### Import data 
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(nlme)
+pol_df = read.csv("./HW7-politeness_data.csv")
+pol_df$subject <- as.factor(pol_df$subject)
+head(pol_df)
+```
+
+Boxplots to show the relationship
+```{r}
+ggplot(pol_df, aes(x = attitude, y = frequency, fill = gender)) +  
+  geom_boxplot(outlier.shape= 16, 
+             outlier.size=2, position = position_dodge(1)) +
+  scale_x_discrete(labels = c("formal register:pol","informal register:inf"))
+```
+
+From this plot, attitude inf category has an overall higher value than pol group, meantime, we can find that there is significant difference between male and female groups, female also has presented a higehr frequency in both two attitude categories.
+
+## (2) Mixed eff􏰀ects model with random interceptsfor di􏰀erent subjects (gender and attitude bets).
+
+```{r}
+## Grouped data: 14 for each subject
+pol_df %>% 
+  group_by( subject) %>% 
+  summarise(n = n())
+```
+
+Since the pitch measurements are typically correlated for same subject and in the same scenario, we have our grouping variable as `subject` and `attitude`.
+
+Mixed Effects Model:
+$$\overbrace{Y_i}^{84\times1} = \overbrace{\underbrace{X_i}_{84\times2} \underbrace\beta_{2 \times 1}}^{84 \times 1} + \overbrace{\underbrace{Z_i}_{84 \times 14} \underbrace{b_i}_{14 \times 1}}^{84\times1} + \overbrace{\epsilon_i}^{84\times1}, \text{i = 1, 2, ... , m }$$
+
+where:
+
+* $Y_i$ is 84 $\times$ 1 vector;
+
+* X is 84 $\times$ 2 matrix of the 2 predictor variables: `attitude` and `gender`;
+
+* $\beta$ is a $2\times$ 1column vector of the fixed-effects regression coefficients;
+
+* $Z_i$ is the $84\times 12$ design matrix for random effects;
+
+* $b_i$ is the $12 \times 1$ random effects; 
+
+* $e_i$ is error vector.
+
+Distributional assumptions: bi and εi are independent
+$$b_i \sim N(0, G), e_i \sim N(0, \sigma^2I)$$
+
+### Model 1: fit a random intercept model
+
+Random intercepts, with linear attitude and gender effect
+
+```{r}
+# fit a random intercept model
+LMM1 <- lme(frequency ~  gender + attitude, 
+             random = ~ 1 | subject,  data = pol_df, method = 'REML') 
+summary(LMM1) # pay attention to: random effects, fixed effects,
+```
+
+* The fixed-effect intercept coefficient for dummy variable  labelled `attitudepol` is $\hat \beta_0$ = -20.00238, represents an estimate of an average level of pitch frequency, which are the baseline category for female individuals in informal politeness group. 
+
+* ```{r}
+# 2.1 The covariance matrix for subject Y_i:
+LMM1$sigma 
+VarCorr(LMM1) # covariance estimates for random effects and variance for residuals
+sigma_b = as.numeric(VarCorr(LMM1)[1,2])^2
+Varyij = as.numeric(VarCorr(LMM1)[2,2])^2 + sigma_b  # variance of yij
+Varyij
+```
+
+* The second panel of summary displays estimates of the variance and covariance parameters for the random effects,
+in the form of standard deviations and correlations, the term labelled Residual is the estimate of
+
+$$Var(Y_i) = 847.7049 + 598.1953 = 1445.9$$
+
+* Because we only have one random intercept, $u \sim N(0, G)$, by assuming that the random effects are independent, 
+
+* Thus, the estimated variance-covariance matrix of the random effects is therefore:
+
+$$G =  \left(\begin{array}{cccc} 
+1445.9 & 598.1953 & \cdots & 598.1953 \\
+598.1953 & 1445.9 & \cdots & 598.1953 \\
+\vdots & \vdots & \ddots  & \vdots \\
+598.1953 & 1445.9 & \cdots  & 598.1953 
+\end{array}\right)_{14 \times 14}$$
+
+```{r}
+# 2.2 The covariance matrix for REML fixed effects estimates (inv fisher info)
+vcov(LMM1) # covariance for fixed effects estimates (inv fisher info)
+```
+
+The covariance matrix for REML fixed effects estimates:
+$$R = \left(\begin{array}{ccc} 
+229.67362 & -219.5819  &  -20.18345\\
+-219.5819  & 439.1638 &  6.451438\times 10^{-15}\\
+-20.18345 &  6.451438\times 10^{-15} & 40.369
+\end{array}\right)$$
+
+```{r}
+# 2.3 BLUPs for subject-specific intercepts
+random.effects(LMM1) # ordered random effects, BLUP (in this case, just b_i)
+```
+
+The Best Linear Unbiased Predictor(BLUP) should be above. 
+
+```{r}
+# 2.4 Residuals 
+pol_df$frequency-fitted(LMM1) # residuals
+```
+
+
+## (3) Fit with additional interaction term
+
+####  Fit a model with interaction term `attitude` * `gender`.
+
+```{r}
+lmm2 <- lme(frequency ~ gender + attitude + gender*attitude, random = ~1 | subject, data = pol_df, method='REML')
+summary(lmm2)
+```
+
+The Likelihood Ratio Test (LRT) of fixed effects requires the models be fit with by MLE (use REML=FALSE for linear mixed models.) 
+
+```{r}
+
+LMM.1 <- lme(frequency ~ attitude + gender, 
+             random = ~ 1 | subject,  data = pol_df,  method = 'ML') 
+summary(LMM.1)
+
+LMM.2 <- lme(frequency ~ attitude + gender + attitude * gender, 
+             random = ~ 1 | subject,  data = pol_df,  method = 'ML') 
+summary(LMM.2)
+```
+
+#### Compare Two models using LR test
+
+```{r}
+anova (LMM.1, LMM.2)
+```
+
+The 1 vs 2 Likelihood Ratio test results proved that the the new model with interaction term for `attitude` and  `gender` is not significantly associated with pitch since P-value 0.2392 is larger than the common cut off alpha level of .05.
+
+## (4) Model 3: Random Intercepts and random slope 
+
+```{r}
+# fit a random intercept and slope model
+LMM3 <- lme(frequency ~ attitude + gender, random = ~ 1 + attitude| subject, data = pol_df, method = 'REML')
+summary(LMM3) 
+```
+
+#### 4.1 Covariance structure for a subject $Y_i$:
+
+```{r}
+# Covariance structure for a subject
+VarCorr(LMM3) # covariance estimates for random effects and variance for residuals
+LMM3$sigma # std for residuals
+vcov(LMM3)
+```
+
+```{r}
+#VarCorr(lmm3)
+g11 = as.numeric(VarCorr(LMM3)[1,2])^2 
+g22 = as.numeric(VarCorr(LMM3)[2,2])^2 
+g12 = as.numeric(VarCorr(LMM3)[2,3]) 
+hat_sigma = as.numeric(VarCorr(LMM3)[3,2]) 
+```
+
+```{r}
+# (1) when attitude of two observations are both inf
+g11 + (hat_sigma)^2 # var 
+g11 # cov
+# (2) when attitude of two observations are both pol
+g11 + 2*g12 + g22 + (hat_sigma)^2  # var 
+g11 + 2*g12 +g22 #cov 
+
+# (3) when attitude of two observations are pol and inf
+g11 + g12 # cov
+```
+
+* The second part of summary panel displays estimates of the variance and covariance parameters for the random effects $Y_i$, in the form of standard deviations and correlations. 
+
+* As 598.1953 and 598.1954 are very closed, so the covariance structure for subject Yi can be approximate to
+compound symmetry.
+
+* In total, there are 3 cases: 
+
+1. For the same attitude and the attitude is inf:
+
+$$A = \left(\begin{array}{cccc} 
+g_{11} + \sigma^2 & g_{11}  & \cdots & g_{11} \\
+g_{11} & g_{11} + \sigma^2  & \cdots & g_{11}\\
+\vdots & \vdots & \ddots  & \vdots \\
+g_{11} & g_{11}  & \cdots & g_{11} + \sigma^2
+\end{array}\right)$$
+
+2. For the same attitude and the attitude is pol:
+$$B = \left(\begin{array}{cccc} 
+g_{11} + 2 \times g_{12} + g_{22} + \sigma^2 & g_{11} + 2 \times g_{12} + g_{22}  & \cdots & g_{11} + 2 \times g_{12} + g_{22} \\
+g_{11} + 2 \times g_{12} + g_{22}  & g_{11} + 2 \times g_{12} + g_{22} + \sigma^2  & \cdots & g_{11} + 2 \times g_{12} + g_{22}\\
+\vdots & \vdots & \ddots  & \vdots\\
+g_{11} + 2 \times g_{12} + g_{22}  & g_{11} + 2 \times g_{12} + g_{22}  & \cdots & g_{11} + 2 \times g_{12} + g_{22} + \sigma^2
+\end{array}\right)$$
+
+3. For different attitudes:
+
+$$C = \left(\begin{array}{cccc} 
+g_{11} + g_{12}  & g_{11} + g_{12} & \cdots & g_{11} + g_{12} \\
+g_{11} + g_{12}  & g_{11} + g_{12}  & \cdots & g_{11} + g_{12} \\
+\vdots & \vdots & \ddots  & \vdots \\
+g_{11} + g_{12}  & g_{11} + g_{12}  & \cdots & g_{11} + g_{12} 
+\end{array}\right)$$
+
+* Thus, The covariance matrix for a subject Yi is
+
+$$Vcov(Y_{ij})= \left(\begin{array}{cc} 
+A & C\\
+C & B 
+\end{array}\right) =  \left(\begin{array}{cccccccc} 
+1445.92 & 598.1953 & \cdots & 598.1953 & 598.1953 & 598.1953 &  \cdots & 598.1953\\
+598.1953 & 1445.92 & \cdots & 598.1953 & 598.1953 & 598.1953 &  \cdots & 598.1953 \\
+\vdots & \vdots & \ddots  & \vdots & \vdots & \vdots & \ddots  & \vdots \\
+598.1953 & 598.1953 & 598.1953 & 1445.92 & 598.1953 & 598.1953 & 598.1953 & 598.1953\\
+598.1953 & 598.1953 & 598.1953  & 598.1953 & 1445.92 & 598.1953 & 598.1953  & 598.1953 \\
+598.1953 & 598.1953 & 598.1953  & 598.1953 & 598.1953 & 1445.92 & 598.1953 & 598.1953\\
+\vdots & \vdots & \ddots  & \vdots  & \vdots & \vdots & \ddots  & \vdots\\
+598.1953 & 598.1953 & \cdots  & 598.1953 & 598.1953  & 598.1953 & \cdots& 1445.92
+\end{array}\right)$$
+
+#### 4.2 Fixed Effect 
+
+```{r}
+fixed.effects(LMM3) # fixed effects coeff 
+```
+
+#### 4.3 Random Effect 
+
+```{r}
+random.effects(LMM3) 
+```
+
+#### 4.4 The Blup for first female in S1 with polite attitude.
+
+```{r}
+random.effects(LMM3) # ordered random effects, BLUP (in this case, just b_i)
+fitted(LMM3) 
+```
+
+From the formula we can see that the female in scenario 1 with polite attitude is 
+$\hat y = 256.98691 -20.00238 - \overbrace{13.575831 -8.418005 \times 10^{-7}}^{\text{random effects}}  =  223.40869$

@@ -1,0 +1,140 @@
+---
+title: "hw3"
+author: Shan Jiang 
+output: pdf_document
+fontsize: 11.5pt
+geometry: margin=1in
+---
+
+
+### 1.	Problem 1
+
+```{r, message=FALSE, warning=FALSE}
+## 1.Active packages
+library(ggplot2)
+library(tidyverse)
+library(aod)
+library(auditor)
+```
+
+```{r, message=FALSE, warning=FALSE}
+
+### 2.import in the esophageal data
+cancer_df = readxl::read_xlsx("./cancer.xlsx") %>% 
+      janitor::clean_names()
+
+cancer_df
+```
+
+```{r}
+### 3. fit a prospective model 
+# fit logit model
+y = cbind(cancer_df$disease, cancer_df$undisea)
+  
+logit.prosp = glm(y ~  alcol + age, family = binomial(link = 'logit'), data = cancer_df)
+
+summary(logit.prosp) ## we cannot interpret the intercept. 
+
+```
+
+Model:
+$$log(\frac{\pi}{1-\pi}) = \beta_0 + \beta_1 \cdot Alcol + \beta_2 \cdot Age $$
+where Alcol = 1 means alcolhol consumption > 80g;
+
+Interpretation: 
+
+* The $\beta_1$  =  1.78 means that the log odds ratio of esophageal cancer  is 1.78 between alcohol consumption below 79g group and alcholhol consumption > 80g for people ranging from 25 to 75 years old.
+
+* The $\beta_2$ means that the log odds ratio of esophageal cancer is  0.06 corresponding to one unit change of age. 
+
+* The $\beta_0$ cannot be interpreted. 
+
+
+### 2. Problem 2 
+
+```{r}
+## import data 
+gertest_df = readxl::read_xlsx("./germin.xlsx") %>% 
+      janitor::clean_names() %>% 
+      mutate(seeds = as.factor(seeds),
+             nutri = as.factor(nutri) )
+
+head(gertest_df)
+```
+
+
+Notation:
+Seed.A = O. aegyptiaca 75;
+Seed.B = O. aegyptiaca 73;
+
+```{r}
+## 3. fit a prospective model 
+# fit logit model
+y = cbind(gertest_df$germi, gertest_df$total - gertest_df$germi)
+
+logit.prosp = glm(y ~ seeds + nutri, family = binomial(link = 'logit'), data = gertest_df)
+
+summary(logit.prosp) 
+```
+
+Model:
+$$log(\frac{\pi}{1-\pi}) = \beta_0 + \beta_1 \cdot seed_B + \beta_2 \cdot nut_{cuc}$$
+
+Interpretation: 
+
+* The $\beta_1$ means that the log odds ratio of germination is -0.2705 between seed  O. aegyptiaca 75 veesus O. aegyptiaca 73.
+
+* The test of $\beta_2$ shows that the p-value is 0.08 > 0.05, which exceeds the threshold for rejection at the sig. level of 0.05, meaning that we cannot reject the null hypothesis that the parameter is not different from 0, which implies there may be no significant impact of seed type on log odds ratio of germination at the sig. level of 0.05.
+
+* However, based on a sig. level of 0.1, we can say The $\beta_2$ implies that the log odds ratio of germination is 1.06 between cucumber and Bean nutrition extract media.
+
+* The $\beta_0$ means that the log odds of germination when the seed is O. aegyptiaca 75 and nutrition extract media is Bean.
+
+### 2.2 Overdispersion 
+
+```{r}
+# goodness of fit
+pval = 1 - pchisq(logit.prosp$deviance, 21-3)
+pval # bad fit
+```
+
+Because of p-value is under 0.05, meaning that we can reject the null hypothesis at the sig. level of $\alpha = 0.05$, and accept the alternative hypothesis that this model is not a good fit.
+
+In this situation, we need to find out is there any dispersion in this dataset that biased our simulation. 
+
+```{r}
+# calc dispersion parameter 
+G.stat = sum(residuals(logit.prosp,type = 'pearson')^2) # pearson chisq 
+
+G.stat
+phi = G.stat/(21 - 3)
+phi
+tilde.phi = logit.prosp$deviance/logit.prosp$df.residual
+tilde.phi # similar to the one estimated from pearson chisq 
+```
+
+The dispersion parameter result is 2.128368.
+
+```{r}
+# test over-dispersion (half normal plot)
+res = residuals(logit.prosp, type = 'pearson')
+plot(qnorm((21 + 1:21 +  0.5)/(2*21 + 1.125)),sort(abs(res)),xlab = 'Expected Half-Normal Order Stats', ylim = c(0, 2), xlim = c(0, 2),  ylab = 'Ordered Abs Pearson Residuals')
+abline(a = 0, b = 1)
+abline(a = 0, b = sqrt(phi),lty = 2)
+
+```
+
+The half-normal plot suggests that the absolute value of residuals obtained from original model suffered a linear deviation from the refrence line, indicating a constant over-dispersion, so we need to adjust our model for a better fit.
+
+```{r}
+# fit model with constant over-dispersion
+summary(logit.prosp, dispersion = phi)
+```
+
+Based on the quasi-likelihood estimation, we fit the model again. In this case, the coefficient $\beta_0$, $\beta_1$, and $\beta_2$ remains the same as the original one, while `new` $\beta_2$ cannot pass the significance test as it was in the original model, suggesting that after ruling out the possibility of dispersion, variable `seed` has yet no significant influence on the germination indeed, we may reconsider this variable in the future modelling. 
+
+Meanwhile, all Std. Error turns bigger as the effect of a parameter $\phi$ in dispersion. 
+
+### 2.3 Causes for over-dispersion
+
+The cause of over-dispersion comes from Intra-Group correlation exists, for example, these plants may share same gene traits or features, then the independent assumption is violated, so the binomial distribution is not followed exactly.

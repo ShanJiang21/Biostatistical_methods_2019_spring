@@ -1,0 +1,214 @@
+---
+title: "P8131_hw6"
+author: Shan Jiang 
+output:
+     pdf_document:
+         latex_engine: xelatex
+fontsize: 10.5pt
+geometry: margin=0.6in
+---
+### Problem  1
+
+#### (1) Variance of $Y_{ij}$.
+
+Since $b_i \sim N(0, \sigma_b^2), e_{ij} \sim N(0, \sigma_e^2)$, and $b_i, e_{ij}$ are independent, so we have:
+
+$$Var(Y_{ij}) = Var(\mu + b_i + e_{ij})$$ 
+As $b_i, e_{ij}$ are independent, $Cov(b_i, e_{ij}) = 0$, so $Var(Y_{ij}) = Var(\mu + b_i + e_{ij}) =  Var(b_i) + Var(e_{ij}) =  \sigma_b^2 + \sigma_e^2$.
+
+#### (2) Covariance between any two values $Y_ij$ and $Y_ik$, j $j \neq k$
+
+$$E(Y_{ij}) = E(\mu +b_i + e_{ij}) = \mu + 0 + 0 = \mu$$
+$$E(Y_{ik}) = E(\mu +b_i + e_{ik}) = \mu + 0 + 0 = \mu$$
+
+$$Cov(Y_{ij}, Y_{ik}) = E[ (Y_{ij} - \bar Y) (Y_{ik} - \bar Y)] = E[(b_i + e_{ij}) (b_i + e_{ik})] = E[(b_i)^2 + e_{ij} * e_{ik} + b_i * (e_{ij} + e_{ik})]$$
+
+$$ = E[(b_i)^2] + E(e_{ij}) * E(e_{ik}) + 0 = E[(b_i)^2] = Var(b_i) + [E(b_i)]^2 = \sigma_b^2$$
+
+
+#### (3) correlation between any two values $Y_ij$ and $Y_ik$
+
+$$Var(Y_{ij}) = Var(b_i + e_{ij}) =\sigma_b^2 + \sigma_e^2$$
+$$Var(Y_{ik}) = Var(b_i + e_{ik}) =\sigma_b^2 + \sigma_e^2$$
+The correlation coefficient:
+
+$$Corr(Y_{ij}, Y_{ik}) = \frac{Cov(Y_{ij}, Y_{ik})}{\sigma Y_{ij} * \sigma Y_{ik}} = \frac{\sigma_b^2}{\sigma_b^2 + \sigma_e^2}$$
+
+#### (4) Covariance Pattern
+
+This one has a constant ovariance between any two values $Y_{ij}$ and $Y_{ik}$ and the correlation between any two Y also being constant, so this corresponds to Compound Symmetry covariance pattern. 
+
+
+### Problem  2 
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+## 1.Active packages
+library(nlme)
+library(ggplot2)
+library(tidyverse)
+library(stargazer)
+library(formattable)
+```
+
+#### 1). Speghetti plot 
+
+1. read in data 
+```{r fig.height=4.5, fig.width=3.5, message=FALSE, warning=FALSE}
+# import in data
+distance <- read.delim("./HW6-dental.txt",sep = '', header = T)
+head(distance)
+```
+
+2. group by color 
+
+```{r}
+p = ggplot(distance, aes(x = Age, y = Distance, group = Child)) +
+  geom_line(aes(color = as.factor(Gender))) 
+
+print(p)
+```
+
+## 2). Marginal model form
+
+Marginal Models:
+There are several cases for different covariances:
+
+### 1) Same gender
+#### (1) Same individual at different ages
+
+$$\begin{aligned}
+Cov(Y_{ij}, Y_{ik}) & = E[(a_i + b_k + e_{ij})(a_i + b_k + e_{ik})] \\
+                    & = E[(a_i^2 + a_i * b_k + a_i * e_{ik} + b_k^2 + b_k * e_{ik} + e_{ij} * e_{ik})] \\
+                    & = E(a_i^2) + E(b_k^2) \\
+                    & = \sigma_a^2 + \sigma_b^2
+\end{aligned}$$
+
+#### (2) For different individuals: same gender
+
+When measured in different ages,
+
+$$
+\begin{aligned}
+Cov(Y_{hj}, Y_{ik}) & = E[(a_h + b_k + e_{hj})(a_i + b_k + e_{ik})] \\
+                    & = E[(a_h * a_i  + a_h * b_k + a_h * e_{ik} + a_i * b_k +  b_k^2 + b_k * e_{ik} + e_{hj} * a_i + e_{hj} * b_k + e_{hj} * e_{ik}] \\
+                    & = E(b_k^2) \\
+                    & = \sigma_b^2
+\end{aligned}$$
+
+When measured at the same age,
+
+$$\begin{aligned}
+Cov(Y_{hj}, Y_{ij}) & = E[(a_h + b_k + e_{hj})(a_i + b_k + e_{ij})] \\
+                    & = E(b_k^2) \\
+                    & = \sigma_b^2
+\end{aligned}$$
+
+2) Different genders 
+
+$$
+\begin{aligned}
+Cov(Y_{hj}, Y_{ik}) & = E[(a_h + b_0 + e_{hj})(a_i + b_1 + e_{ik})] \\
+                    & = 0
+\end{aligned}
+$$
+
+
+
+Finaly, the model in marginal form is:
+
+$$E(Y_{ij}) = \beta_0 + a_i + b_0 * I (sex_i = 0) + b_1 * I (sex_i = 1) +  \beta_1 * age_{ij} + e_{ij}$$
+$a_i, b_k, e_{ij}$ are mutually independent, 
+
+$$\mathbf{Var(Y_i)} = \left[\begin{array}
+{rrr}
+N_g & 0  \\
+0 & N_b  \\
+\end{array}\right]_{27 \times 27}$$
+where $N_g$and $N_b$ are matrix for different genders.
+
+
+
+#### 3). Model fitting 
+
+##### (1) Compound symmetry covariance with RMLE fit 
+
+```{r}
+## Compound symmetry
+comsym <- gls(Distance ~ Gender + Age, distance, correlation = corCompSymm(form = ~ 1 | Child),  
+   method = "REML")
+summary(comsym)
+corMatrix(comsym$modelStruct$corStruct)[[1]]
+
+comcov = corMatrix(comsym$modelStruct$corStruct)[[1]] * (comsym$sigma)^2
+comcov
+```
+
+$$E(Y) = 15.385 + 2.321 * Gender - 0.6601 * Age$$
+
+Compound symmetry: 
+
+* 2 covariance parameters, $\sigma^2$ and $\rho$, regardless of n;
+* constant variance, and correlation does not decay.
+
+
+##### (2) Exponential covariance
+
+```{r}
+exp1 <- gls(Distance ~ Gender + Age, distance, correlation = corExp(form = ~ 1 |Child), method = "REML")
+summary(exp1)
+corMatrix(exp1$modelStruct$corStruct)[[1]]
+```
+
+$$E(Y_{ij}) = 15.4599 + 2.418714 * Gender - 0.6529 * Age$$
+
+Variance: 
+
+```{r}
+exp1cov = corMatrix(exp1$modelStruct$corStruct)[[1]]  * (exp1$sigma)^2
+exp1cov
+```
+
+Exponential:
+
+* Unbalanced study, ith subject has response times $t_{i,1}, t_{i,2}, ..., t_{i,ni}$;
+* Reduces to AR(1) when all response times are the same.
+
+
+##### (3) Autoregrassive covariance 
+
+```{r}
+# AR(1)
+auto1 <- gls(Distance ~ Gender + Age, distance, 
+             correlation = corAR1(form = ~ 1 |Child), method = "REML")
+summary(auto1)
+corMatrix(auto1$modelStruct$corStruct)[[1]]
+```
+$$E(Y_{ij}) = 15.4599 + 2.418714 * Gender - 0.6529 * Age$$
+
+Autoregressive (order 1) Variance: 
+```{r}
+autocov = corMatrix(auto1$modelStruct$corStruct)[[1]] * (auto1$sigma)^2
+autocov
+```
+
+* special case of Toeplitz;
+* 2 covariance parameters, $\sigma^2$ and $\rho$, regardless of n;
+* constant variance, correlation decays geometrically (exponentially)
+
+#####  Model comparison
+
+parameter estimates
+
+```{r}
+sumtable <- matrix(c(2.045166,	2.418714,	2.418714, 
+                     0.674651,	0.65296,	0.65296), ncol = 3,byrow = TRUE)
+colnames(sumtable) <- c("Compound", "Exponential", "AutoRegression")
+rownames(sumtable) <- c("Gender","Age")
+sumtable <- as.table(sumtable)
+sumtable
+```
+
+Conclusion: here coefficient parameter estimates are the same for Exponential and AutoRegression, while different from Compound model. The covariance estimates of compund symmetry model proves that all covariance are the same without weight. Since models with compound symmetry assume correlation between any two visits are constant, their covariance estimates are different.
+
+
+

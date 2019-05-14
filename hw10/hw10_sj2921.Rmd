@@ -1,0 +1,159 @@
+---
+title: "P8131_hw10"
+author: Shan Jiang 
+output:
+     pdf_document:
+         latex_engine: xelatex
+fontsize: 11.5pt
+geometry: margin=1.1in 
+---
+
+```{r include=FALSE}
+library(flexsurv)
+library(survival)
+library(MASS)
+library(survminer)
+```
+
+
+## Problem 1
+
+```{r}
+# load data 
+#############################################
+time  = c(4, 2, 12, 6, 15, 8, 21, 10, 23, 19)
+pair = c(1, 1, 2, 2, 3, 3, 4, 4, 5, 5)
+cens = c(0, 0, 1, 1, 0, 1, 1, 0, 0, 0)
+treat = rep(c(1, 2), 5 )
+
+df = data.frame(pair, time, cens, treat)
+head(df)
+```
+
+
+$H_0: h_1(t) = h_2(t)$ for all t
+$H_1: h_1(t) \neq h_2(t)$ 
+
+```{r}
+## Log Rank test
+survdiff(Surv(time,cens)~treat, data = df) # log rank test
+
+ggsurvplot( survfit(Surv(time, cens) ~ treat, data = df), conf.int = TRUE)
+```
+
+Interpretation: 
+
+* The log rank test: at the significance of 0.05, we cannot reject the null hypothesis as p > 0.3.So, we cannot say there is significant difference for hazard function between these two groups.
+
+
+## Problem 2
+
+```{r}
+library(KMsurv)
+data(kidtran)
+```
+
+ * gender: 1 = Male, 2 = Female;
+ * race: 1 = white, 2 = black; 
+ * delta: Death indicator (0 = alive, 1 = dead);
+
+### Two gender group data: visual comparison
+
+#### Group 1: Male(gender = 1)
+
+```{r}
+## gender: Male
+ggsurvplot(survfit(Surv(time, delta) ~  race, data = subset(kidtran, gender == "1")), conf.int=TRUE)
+
+```
+
+More formal way to compare intra-group differences, is by using the log-rank test to test hypotheses.
+
+```{r}
+# Male
+survdiff(Surv(time,delta) ~ race, data = subset(kidtran, gender == "1"))
+```
+
+In the log-rank test, we fail to reject the null hypothesis and conclude that there is no significant difference in two races groups for t defined. 
+
+```{r}
+fit = coxph(Surv(time, delta) ~  gender + race, 
+            data = kidtran)
+summary(fit)
+
+## In male group 
+fit_male = coxph(Surv(time, delta) ~ race, 
+            data = subset(kidtran, gender == "1"))
+summary(fit_male)
+```
+
+#### Group 2: Female(gender = 2)
+
+```{r}
+## gender: Female 
+ggsurvplot(survfit(Surv(time, delta) ~  race, data = subset(kidtran, gender == "2")), conf.int=TRUE)
+
+# Female
+survdiff(Surv(time,delta) ~ race, data = subset(kidtran, gender == "2"))
+```
+
+For female subjects, there is a significant difference in hazards ratio (p < 0.03) for Black and white people.
+
+```{r}
+## Female(gender = 2)
+fit_male = coxph(Surv(time, delta) ~ age + race, 
+            data = subset(kidtran, gender == "2"))
+summary(fit)
+```
+
+
+## Problem 3
+
+```{r}
+data(larynx)
+
+larynx = larynx %>%  
+            mutate( Z1 = ifelse(stage == 2, 1, 0)) %>% 
+            mutate( Z2 = ifelse(stage == 3, 1, 0)) %>% 
+                mutate( Z3 = ifelse(stage == 4, 1, 0)) %>% 
+                mutate( Z4 = age) %>% 
+                mutate( Z1_Z4 =  Z1 * Z4) # ADD interaction term Z1 * Z
+
+head(larynx)
+```
+
+
+#### Model building 
+
+$h(t) = h_0(t) exp(\beta_1Z_1 + \beta_2Z_2 + \beta_3Z_3 + \beta_4Z_4 + \beta_5Z_1 \times Z_4$
+
+```{r}
+
+fit_3 = coxph(Surv(time, delta) ~  age + Z1 + Z2 + Z3 + Z4 + Z1_Z4, 
+            data = larynx, ties = 'breslow')
+
+summary(fit_3)
+
+```
+
+Interpretation of results:
+
+* $\beta_1 + \beta_5$: The log hazard ratio for subjects in stage II versus stage I is (-7.382 + 0.112 $\times$age) given of the same age.
+
+* $\beta_2$: The log hazards ratio for subjects in stage III versus stage I is 0.621 given the same age.
+
+* $\beta_3$: The log hazards ratio for subjects in stage IV versus stage I is 1.753 given they have same age.
+
+* $\beta_4$: Compared to non-Stage II, the log hazards ratio for subjects with one unit changes in age is 0.006 given they are in same stage.
+
+* $\beta_4 + \beta_5$: In the stage II for subjects, the log hazards ratio for subjects with one unit
+changes in age is 0.118.
+
+Relative risk:
+
+* For the hazards of dying for a stage II patient of age 50 is:
+$$h_2(t) = h_0(t) \times exp(−7.382 × 1 + 0.111 × 1 × 5)$$
+
+* For the hazard of dying for a stage I patient of age 50 is
+$$h_1(t) = h_0(t)exp(0)$$
+* *So* the hazard ratio: $HR(t) = \frac{h_2(t)}{h_1(t)} = 0.16$

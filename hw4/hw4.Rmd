@@ -1,0 +1,293 @@
+---
+title: "P8131_hw4"
+author: Shan Jiang 
+output:
+     pdf_document:
+         latex_engine: xelatex
+fontsize: 12pt
+geometry: margin=1in
+
+---
+
+### Problem  1 Copenhagen Residents sstisfactory survey
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+## 1.Active packages
+library(ggplot2)
+library(tidyverse)
+library(stargazer)
+library(formattable)
+```
+
+#### 1. summarize the data 
+```{r, message=FALSE, warning=FALSE}
+
+# import in the copenhagen data
+
+copen_raw <- data.frame(res.low = c(65, 130, 67, 34, 141, 130),         res.med = c(54, 76, 48, 47, 116, 105), 
+       res.hig = c(100, 111, 62, 100, 191, 104), 
+       contact = c(rep("low", 3), rep("high",3)), 
+       house = rep(c("Tower block", "Apartment", "House"), 2) ) 
+
+
+copen_raw$house = factor(copen_raw$house, 
+                         levels = c("Tower block", "Apartment", "House"))
+copen_raw$contact  = factor(copen_raw$contact, 
+                         levels = c("low", "high"))
+
+```
+
+### Pair-wise Tables
+
+```{r}
+## categorical tables by contact and house 
+copen.df1 = copen_raw %>% 
+  mutate(total = res.low + res.med + res.hig) %>% 
+  mutate(low.p =  percent(res.low / total),
+         med.p =  percent(res.med / total),
+         hig.p = percent(res.hig / total)) %>% 
+  dplyr::select(house, contact, res.low, 
+         low.p, res.med, med.p, res.hig, hig.p, total)
+ 
+knitr::kable(copen.df1, caption = "")
+```
+
+(1) Pair wise table of house
+```{r}
+## Pair wise table of house
+copen.df3 = copen.df1 %>% 
+  dplyr::select(-c(contact, low.p, med.p, hig.p)) %>% 
+  group_by(house) %>% 
+  summarise_each(funs(sum)) %>% 
+  mutate(low.p =  percent(res.low / total),
+         med.p =  percent(res.med / total),
+         hig.p = percent(res.hig / total)) 
+
+copen.df3 = copen.df3 %>% 
+ dplyr::select(house, res.low, 
+         low.p, res.med, med.p, res.hig, hig.p, total)
+knitr::kable(copen.df3, caption = "")
+```
+
+
+Based a single variate category analysis, it's clear that for Tower, people tend to have a higher satisfaction level while for the apartment and house type, the difference of satisfaction level is not that huge.
+
+(2) By contact: Pair wise table
+```{r}
+## Pair wise table of contact 
+copen.df2 = copen.df1 %>% 
+  dplyr::select(-c(house, low.p, med.p, hig.p)) %>% 
+  group_by(contact) %>% 
+  summarise_each(funs(sum)) %>% 
+  mutate(low.p =  percent(res.low / total),
+         med.p =  percent(res.med / total),
+         hig.p = percent(res.hig / total)) 
+
+copen.df2 = copen.df2 %>% 
+ dplyr::select(contact, res.low, 
+         low.p, res.med, med.p, res.hig, hig.p, total)
+knitr::kable(copen.df2, caption = "")
+```
+
+
+Based on the  Pair wise table low and high category group seperation, high contact groups have a higher cluster in higher level satisfaction level instead of lower level.
+
+From this table, we can find that there are three ordinal classes for satisfaction level, as we are curious about the causal relationship between degree of contact with other residents, housing conditions and satisfaction level, we can fit an ordinal logistic regression for modelling.
+
+
+### 2.1 Nominal logistic Regression 
+
+The default reference level is the first row;
+The summary outputs two rows = two model results
+
+Notation: *contact*: 
+Reference level is 0;
+0 is low, 1 is High;
+
+```{r}
+## create an indicator variable for housing conditions
+  library(nnet)
+## Fit nominal model 
+copen.mult <- multinom(cbind(res.low, res.med, res.hig) ~ 
+                     contact + house, data = copen_raw)
+
+summary(copen.mult)
+
+```
+
+```{r results = "asis"}
+stargazer::stargazer(copen.mult, header = T )
+```
+
+# Reference level is housing = tower;
+ 
+$$ln(\frac{P(median)}{P(low)}) = \beta_{10} + \beta_{11}(contact = 1) +  \beta_{12}(apartment = 1) + \beta_{13}(house = 1)$$
+* $\beta_{10}$: The estimated log-odds for satisfactory level being median vs being low for residents with low contacts and lives in tower is 0.1887213.
+
+* $\beta_{11}$: The estimated log-odds  for satisfactory level being median vs being low for residents who have a high contact when keeping the housing the same is 0.2959.
+
+* $\beta_{12}$: The estimated log-odds for satisfactory level being median versus vs being low for residents who live in an apartment vs tower is -0.4067.
+
+* $\beta_{13}$: The estimated log-odds  for satisfactory level being median vs being low for residents who live in a house vs tower is in the amount of -0.3371.
+
+
+*For equation 2, the interpretation is similar:
+
+$$ln(\frac{P(high)}{P(low)}) = \beta_{20} + \beta_{21}(contact = 1) + \beta_{22}(apartment = 1) + \beta_{23}(house = 1)$$
+
+* $\beta_{20}$: The estimated log-odds for satisfactory level being high vs being low for residents with low contacts and lives in Tower is 0.561.
+
+* $\beta_{21}$: The estimated log-odds for satisfactory level being high vs being low for residents who have a high contact keeping the housing the same is 0.328.
+
+* $\beta_{22}$: The estimated log-odds for satisfactory level being high versus vs being low for residents who live in an apartment housing vs. tower in the amount of −0.946.
+
+* $\beta_{23}$: The estimated log-odds for satisfactory level being high vs being low for residents who live in a house vs. tower in the amount of is −0.6416.
+
+
+#### 95% CI for odds ratio 
+
+```{r}
+## 95% confidence Interval of odds ratio
+### model 1 
+### OR 
+exp(summary(copen.mult)$coefficients)[1,]
+### lower bound:
+exp(summary(copen.mult)$coefficients - 1.96 * summary(copen.mult)$standard.errors)[1,]
+### higher bound:
+exp(summary(copen.mult)$coefficients + 1.96 * summary(copen.mult)$standard.errors)[1,]
+
+```
+
+Model 1:
+$$ln(\frac{P(median)}{P(low)}) = \beta_{10} + \beta_{11}(contact = 1) + \beta_{12}(apartment = 1) +  \beta_{13}(house = 1) $$
+
+* OR for contact: In this study, subjects with high contact 1.3443 times the odds of having median satisfaction vs low satisfaction compared to low-contact subjects. 
+* With 95% conficence the true odds ratio for median vs low satisfaction for high vs low contact lies in the range of [1.0418, 1.7349].
+
+* OR for apartment: subjects who live in apartment have 0.6658 times the odds of having median satisfaction vs low satisfaction compared to those who live in Tower Block.
+* We are 95% confident that the true odds ratio for median vs low satisfaction for house vs Tower Block lies in the range of [0.4759, 0.9315].
+
+* OR for house: subjects who live in a house have 0.6658 times the odds of having median satisfaction vs low satisfaction compared to those who live in Tower Block.
+* We are 95% confident that the true odds ratio for median vs low satisfaction for Apartment vs Tower Block lies in the range of [0.5013, 1.0166].
+
+
+
+Model 2:
+
+$$ln(\frac{P(high)}{P(low)}) = \beta_{20} + \beta_{21}(contact = 1) + \beta_{22}(apartment = 1) +  \beta_{23}( house= 1) $$
+
+* 95% CI for OR of model 2: high/low: 
+```{r}
+## model 2
+### OR 
+exp(summary(copen.mult)$coefficients)[2,]
+## lower bound
+exp(summary(copen.mult)$coefficients - 1.96 * summary(copen.mult)$standard.errors)[2,]
+
+## higher bound 
+exp(summary(copen.mult)$coefficients + 1.96 * summary(copen.mult)$standard.errors)[2,]
+```
+
+* OR for contact: In this study, subjects with high contact 1.3885 times the odds of having high satisfaction vs low satisfaction compared to low-contact subjects. 
+* With 95% conficence the true odds ratio for high vs low satisfaction for high vs low contact lies in the range of [1.1014, 1.7504].
+
+* OR for Apartment: subjects who live in apartment have 0.5265 times the odds of having high satisfaction vs low satisfaction compared to those who live in Tower Block.
+* We are 95% confident that the true odds ratio for high vs low satisfaction for house vs Tower Block lies in the range of [0.3923, 0.7065].
+
+* OR for house: subjects who live in an house have 0.3884 times the odds of having high satisfaction vs low satisfaction compared to those who live in Tower Block.
+* We are 95% confident that the true odds ratio for high vs low satisfaction for House vs Tower Block lies in the range of [0.2814, 0.5362].
+
+
+#### Goodness of Fit 
+```{r}
+pihat = predict(copen.mult,type = 'probs') 
+## pihat: print out the pi(i, j) hats corresponding to the data obs.
+m = rowSums(copen_raw[,1:3])
+res.pearson = (copen_raw[,1:3] - pihat*m)/sqrt(pihat*m) # pearson residuals 
+res.pearson
+# deviance   
+D.stat =  sum(2 * copen_raw[,1:3] * log(copen_raw[,1:3]/(m * pihat)))
+D.stat
+
+# Generalized Pearson Chisq Stat
+G.stat = sum(res.pearson^2) 
+G.stat
+
+# deviance analysis
+pval = 1 - pchisq(G.stat,df = (6 - 4) * (3 - 1)) 
+# fit is good # not rejected, go with the smaller model
+
+```
+Based on the results, we can know that the model fits okay. 
+
+
+### 3. Proportional odds model
+
+```{r warning=FALSE, include=FALSE}
+library(MASS)
+## data.framed as factorized
+freq = c(copen_raw$res.low, copen_raw$res.med, copen_raw$res.hig)
+res = c(rep(c("low","median","high"),c(6,6,6)))
+res = factor(res,levels = c("low","median","high"),ordered = T)
+house = c(rep(c("Tower block", "Apartment", "House"),c(1,1,1)))
+          
+copen.ord <- data.frame(res = res, 
+                      contact = rep(copen_raw$contact,3),
+                      house, freq = freq)
+
+copen.ord$contact = factor(copen.ord$contact, 
+         levels = c("low","high"))
+copen.ord$house = factor(copen.ord$house, 
+                         levels = c("Tower block", "Apartment", "House"))
+head(copen.ord, 5)
+
+```
+```{r}
+# fit proportional odds model
+copen.polr = polr(res ~ contact + house, 
+                  data = copen.ord, weights = freq)
+
+summary(copen.polr) 
+# pay attention to sign, read help doc of polr (-eta)
+```
+
+
+```{r results='asis'}
+stargazer(copen.polr, type = 'latex', header = F )
+```
+
+Output in R gives us negative results of linear predictors:
+$$log(\frac{P(\pi_{low})}{P(\pi_{median } + {\pi_{high}})}) = -0.9973 - 0.2524*Contact + 0.5009*apartment + 0.7362*house$$
+$$log(\frac{P(\pi_{low} + \pi_{median})}{P({\pi_{high}})}) = 0.1152 - 0.2524*Contact + 0.5009 * apartment + 0.7362 *house$$
+
+
+Model Interpretation:
+* Reference level is **apartment** for housing;
+* The two models have the same parameters for covariates while they have different intercepts;
+
+* Log Odds ratio interpretation: The estimated log odds of prob. being low satisfaction over the prob. of (median + high) satisfaction [**or** prob. being low and median over the prob. of highly satisfied] is -0.2524  for high contact level vs. low contact;
+
+* Log Odds ratio interpretation: The estimated log odds of prob. being low satisfaction over the prob. of (median + high) satisfaction [**or** prob. being low and median over the prob. of highly satisfied] for who lives in house vs tower is 0.7362; 
+
+*The log odds of in prob. being low satisfaction over the prob. of (median + high) satisfaction [**or** prob. being low and median over the prob. of highly satisfied] for for who lives in apartment  vs. tower is  0.5009.
+
+
+### problem 4
+
+```{r}
+# residuals for the dataset.
+p_hat = predict(copen.polr, copen_raw, type = 'p')
+m_2 = rowSums(cbind(copen_raw$res.low, 
+                  copen_raw$res.med, 
+                  copen_raw$res.hig))
+res.pearson_2 = (copen_raw[,1:3] - p_hat*m_2)/sqrt(p_hat*m_2)
+
+## Absolute value of res.pearson_2
+abs(res.pearson_2)
+
+## The max is high contact level and housing type is house.  
+abs(res.pearson_2)[6,3]
+```
+
+From the model diagnostic results above, we can see that in the these cells, when housing type is **House** and contact level is **high**, this is the largest discrepancy that will be resulted in the model. 

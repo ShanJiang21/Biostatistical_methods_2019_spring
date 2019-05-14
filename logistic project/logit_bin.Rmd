@@ -1,0 +1,35 @@
+---
+title: "Logistic_binomial"
+author: "Shan"
+date: "2/16/2019"
+output: html_document
+---
+```{r}
+library(ggplot2)
+library(tidyverse)
+```
+
+```{r}
+## import ravens data 
+load("~/Downloads/mailman_semester_2/Biotatistics Methods II/logistic project/ravensData.rda")
+head(ravensData)
+```
+
+
+
+```{r}
+## By default the link function is logit
+logit_glm = glm(ravensData$ravenWinNum~ravensData$ravenScore, family = "binomial")
+summary(logit_glm)
+```
+
+
+```{r}
+## fitted values in the Ravens data
+ggplot(data = ravensData, aes(x = ravenScore, y = logit_glm$fitted, alpha = 0.6)) +
+  geom_point( ) +
+  geom_smooth(se = T, na.rm = T) +
+  theme_bw() 
+  
+```
+

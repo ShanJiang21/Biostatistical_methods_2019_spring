@@ -1,0 +1,52 @@
+---
+title: "P8131_hw7"
+author: Shan Jiang 
+output:
+     pdf_document:
+         latex_engine: xelatex
+fontsize: 10.5pt
+geometry: margin=0.6in
+---
+
+```{r}
+library(nlme)
+library(tidyverse)
+data(Orthodont)
+plot(Orthodont)
+```
+
+```{r}
+levels( Orthodont$Sex)
+
+Orthofem = Orthodont %>% 
+  filter(Sex == "Female")
+
+fem_df = groupedData(distance ~ age | Subject, data = Orthofem,  
+                     labels = list( x = "Age", y = "Distance from pituitary to pterygomaxillary fissure" ), 
+                     units = list( x = "(yr)", 
+                                   y = "(mm)") )
+
+fm1OrthF.lis <- lmList( distance ~ age, data = fem_df)
+coef( fm1OrthF.lis )
+
+intervals( fm1OrthF.lis ) # would give individual conf intervals
+plot( intervals(fm1OrthF.lis) ) # produces Figure 1.12
+
+```
+
+
+```{r}
+fm2OrthF.lis <- update(fm1OrthF.lis, distance ~ I( age - 11 )) 
+plot( intervals( fm2OrthF.lis ) )
+```
+
+## model 
+```{r}
+ # Model 1: random intercepts, linear age effect
+ m1 <- lme( distance ~ age, data = fem_df, random = ~ 1 | Subject )
+
+ # Model 2:
+ m2 <- update( m1, random = ~ age | Subject )
+```
+
+Model m1 can be alternatively interpreted as having within-subject covariance given by compound symmetry.
